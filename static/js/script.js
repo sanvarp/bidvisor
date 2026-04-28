@@ -141,6 +141,31 @@ function avatarColor(seed) {
 
 const SKELETON_BLOCK = '<div class="skeleton-block"><div class="skeleton-line w90"></div><div class="skeleton-line w70"></div><div class="skeleton-line w80"></div></div>';
 
+function formatBudget(value) {
+    // Normaliza el campo "Presupuesto" cuando el modelo devuelve un número pelado.
+    // Si ya viene con moneda explícita o texto, lo deja tal cual.
+    if (!value) return value;
+    const trimmed = String(value).trim();
+    if (!trimmed) return trimmed;
+
+    // Ya menciona moneda → no tocar
+    if (/\b(COP|USD|EUR|MXN|CLP|PEN|ARS|BRL|GBP|JPY|CAD)\b/i.test(trimmed)) return trimmed;
+    if (/peso|d[oó]lar|euro/i.test(trimmed)) return trimmed;
+
+    // Si es solo un número (con o sin separadores/símbolo $), formatea en COP
+    const onlyNumber = /^[\$\s]*\d[\d.,\s]*$/.test(trimmed);
+    if (onlyNumber) {
+        const digits = trimmed.replace(/[^\d]/g, '');
+        if (digits.length > 0) {
+            const num = Number(digits);
+            if (!isNaN(num)) {
+                return '$' + num.toLocaleString('es-CO') + ' COP';
+            }
+        }
+    }
+    return trimmed;
+}
+
 function renderFileItem(filename) {
     const ext = (filename.split('.').pop() || '').toUpperCase();
     const safe = filename.replace(/"/g, '&quot;');
@@ -342,7 +367,10 @@ document.addEventListener('DOMContentLoaded', function () {
                     element = document.getElementById(data.field);
                 }
                 if (element) {
-                    element.innerHTML = marked.parse(data.value);
+                    const value = (data.field === 'presupuesto' || data.field === 'budget')
+                        ? formatBudget(data.value)
+                        : data.value;
+                    element.innerHTML = marked.parse(value);
                     element.classList.remove('pending');
                 }
             } else {
@@ -496,7 +524,7 @@ function loadSessionDetails(session_id) {
                     } else if (item.field === "objective" || item.field === "objeto") {
                         fillField('objeto', item.value);
                     } else if (item.field === "budget" || item.field === "presupuesto") {
-                        fillField('presupuesto', item.value);
+                        fillField('presupuesto', formatBudget(item.value));
                     }
                 } else if (item.section === "cronograma") {
                     document.getElementById('cronograma').innerHTML = marked.parse(item.value);

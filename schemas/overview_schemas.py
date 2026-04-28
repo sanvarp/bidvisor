@@ -20,6 +20,11 @@ BUDGET_SCHEMA = [
     ResponseSchema(
         name="budget",
         type="string",
-        description="El presupuesto total asignado a la ejecución del proyecto, incluyendo impuestos y otros costos asociados. Este monto puede ser expresado en la moneda local o en una moneda extranjera.",
+        description=(
+            "Presupuesto total formateado con separadores de miles y código ISO de la moneda al final. "
+            "Si el documento no menciona la moneda, asume COP (Pesos Colombianos). "
+            "Formato: '$1.234.567.890 COP' o 'USD 1,234,567'. "
+            "Convierte montos expresados en millones/miles al valor completo con todos los dígitos."
+        ),
     )
 ]
