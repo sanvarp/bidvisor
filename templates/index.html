@@ -1,98 +1,207 @@
 {% extends "base.html" %}
 
 {% block body %}
-<div class="container-fluid mt-4">
-    <div class="row">
+<div class="app-shell">
+    <div class="row g-0">
         <!-- Columna izquierda: Panel de Sesiones -->
-        <div class="col-md-2 d-flex flex-column" style="min-height: 100vh;">
-            <div class="card flex-grow-1">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <strong>Sesiones</strong>
-                    <button id="newSessionButton" class="btn btn-sm btn-primary">+</button>
+        <aside class="col-md-2 sessions-col">
+            <div class="sessions-panel-wrap">
+                <div class="sessions-header">
+                    <span class="sessions-title">Sesiones</span>
+                    <button id="newSessionButton" class="btn btn-sm btn-primary" title="Nueva sesión"><i class="fas fa-plus"></i></button>
                 </div>
-                <div class="card-body" id="sessionPanel">
-                    <p id="noSessionMsg">Cargando...</p>
+                <div class="sessions-list" id="sessionPanel">
+                    <div class="sessions-loading">
+                        <div class="skeleton-line w80"></div>
+                        <div class="skeleton-line w60"></div>
+                        <div class="skeleton-line w70"></div>
+                    </div>
                 </div>
             </div>
-        </div>
+        </aside>
 
         <!-- Columna central: Subida y procesamiento -->
-        <div class="col-md-6" id="mainContentColumn">
+        <main class="col-md-6 main-col" id="mainContentColumn">
             <div id="emptyState" class="d-none">
-                <h3>No hay sesión seleccionada</h3>
-                <p>Por favor, crea una sesión para iniciar.</p>
-                <button class="btn btn-primary" id="createSessionFromEmpty">Crear sesión</button>
+                <svg class="empty-illustration" viewBox="0 0 200 160" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                    <defs>
+                        <linearGradient id="emptyGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stop-color="#FFE8D6"/>
+                            <stop offset="100%" stop-color="#FFD0A6"/>
+                        </linearGradient>
+                    </defs>
+                    <ellipse cx="100" cy="140" rx="60" ry="6" fill="#000" opacity="0.05"/>
+                    <rect x="50" y="40" width="80" height="100" rx="8" fill="url(#emptyGrad)" stroke="#F37021" stroke-width="2"/>
+                    <line x1="62" y1="60" x2="118" y2="60" stroke="#F37021" stroke-width="2" opacity="0.35"/>
+                    <line x1="62" y1="72" x2="100" y2="72" stroke="#F37021" stroke-width="2" opacity="0.35"/>
+                    <line x1="62" y1="84" x2="115" y2="84" stroke="#F37021" stroke-width="2" opacity="0.35"/>
+                    <line x1="62" y1="96" x2="95" y2="96" stroke="#F37021" stroke-width="2" opacity="0.35"/>
+                    <circle cx="140" cy="50" r="22" fill="#F37021"/>
+                    <path d="M 132 50 L 138 56 L 148 44" stroke="white" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                <h3>Empieza creando una sesión</h3>
+                <p>Cada sesión es un proyecto independiente con sus propios documentos y chat.</p>
+                <button class="btn btn-primary" id="createSessionFromEmpty"><i class="fas fa-plus me-2"></i>Crear sesión</button>
             </div>
 
             <div id="mainContent" class="d-none">
-                <div class="card mb-4" id="uploadProcessCard">
-                    <div class="card-header">
-                        <strong>Subir y Procesar Documentos</strong>
+                <!-- Stepper de progreso -->
+                <div class="workflow-stepper" id="workflowStepper">
+                    <div class="step active" data-step="1">
+                        <div class="step-circle"><i class="fas fa-cloud-arrow-up"></i></div>
+                        <div class="step-label">Subir</div>
                     </div>
+                    <div class="step-connector"></div>
+                    <div class="step" data-step="2">
+                        <div class="step-circle"><i class="fas fa-bolt"></i></div>
+                        <div class="step-label">Procesar</div>
+                    </div>
+                    <div class="step-connector"></div>
+                    <div class="step" data-step="3">
+                        <div class="step-circle"><i class="fas fa-comments"></i></div>
+                        <div class="step-label">Conversar</div>
+                    </div>
+                </div>
+
+                <div class="card mb-4" id="uploadProcessCard">
                     <div class="card-body">
                         <div id="dropzone" class="dropzone">
-                            <i class="fas fa-cloud-arrow-up" style="font-size: 1.5rem; display: block; margin-bottom: 8px; opacity: 0.7;"></i>
-                            Arrastra y suelta archivos aquí o haz clic para seleccionar.
-                            <div style="font-size: 0.8rem; color: var(--text-subtle); margin-top: 6px;">PDF, DOCX o TXT</div>
+                            <div class="dropzone-icon"><i class="fas fa-cloud-arrow-up"></i></div>
+                            <div class="dropzone-title">Arrastra y suelta archivos aquí</div>
+                            <div class="dropzone-subtitle">o haz clic para seleccionar · PDF, DOCX o TXT</div>
                         </div>
                         <input type="file" id="fileInput" multiple class="hidden" />
-                        <ul id="fileList" class="mt-3"></ul>
-                        <button id="processButton" class="btn btn-primary mt-3"><i class="fas fa-bolt me-2"></i>Procesar Documentos</button>
-                        <div id="processStatus" class="mt-2"></div>
+                        <ul id="fileList" class="file-grid mt-3"></ul>
+                        <div class="upload-actions">
+                            <button id="processButton" class="btn btn-primary"><i class="fas fa-bolt me-2"></i>Procesar Documentos</button>
+                            <div id="processStatus" class="process-status"></div>
+                        </div>
                     </div>
                 </div>
 
                 <!-- Secciones de información extraída -->
                 <div id="extractedInfo">
-                    <div class="card extracted-section">
-                        <div class="card-header"><strong>0. Información General</strong></div>
+                    <div class="card extracted-section" data-section-icon="building">
+                        <div class="card-header section-header">
+                            <span class="section-chip">01</span>
+                            <span class="section-icon"><i class="fas fa-building-columns"></i></span>
+                            <span class="section-title">Información General</span>
+                        </div>
                         <div class="card-body" id="infoGeneral">
-                            <p><strong>Entidad contratante:</strong> <span id="entidad" class="info-value pending">Pendiente</span></p>
-                            <p><strong>Objeto de convocatoria:</strong> <span id="objeto" class="info-value pending">Pendiente</span></p>
-                            <p><strong>Presupuesto:</strong> <span id="presupuesto" class="info-value pending">Pendiente</span></p>
+                            <div class="info-row">
+                                <div class="info-label">Entidad contratante</div>
+                                <div id="entidad" class="info-value pending">Pendiente</div>
+                            </div>
+                            <div class="info-row">
+                                <div class="info-label">Objeto de convocatoria</div>
+                                <div id="objeto" class="info-value pending">Pendiente</div>
+                            </div>
+                            <div class="info-row">
+                                <div class="info-label">Presupuesto</div>
+                                <div id="presupuesto" class="info-value pending">Pendiente</div>
+                            </div>
                         </div>
                     </div>
                     <div class="card extracted-section">
-                        <div class="card-header"><strong>1. Cronograma</strong></div>
+                        <div class="card-header section-header">
+                            <span class="section-chip">02</span>
+                            <span class="section-icon"><i class="fas fa-calendar-days"></i></span>
+                            <span class="section-title">Cronograma</span>
+                        </div>
                         <div class="card-body" id="cronograma">
                             <p><span class="info-value pending">Pendiente</span></p>
                         </div>
                     </div>
                     <div class="card extracted-section">
-                        <div class="card-header"><strong>2. Presentación y Documentos Necesarios</strong></div>
+                        <div class="card-header section-header">
+                            <span class="section-chip">03</span>
+                            <span class="section-icon"><i class="fas fa-file-lines"></i></span>
+                            <span class="section-title">Presentación y Documentos Necesarios</span>
+                        </div>
                         <div class="card-body" id="presentacion">
                             <p><span class="info-value pending">Pendiente</span></p>
                         </div>
                     </div>
                     <div class="card extracted-section">
-                        <div class="card-header"><strong>3. Perfiles Requeridos</strong></div>
+                        <div class="card-header section-header">
+                            <span class="section-chip">04</span>
+                            <span class="section-icon"><i class="fas fa-users"></i></span>
+                            <span class="section-title">Perfiles Requeridos</span>
+                        </div>
                         <div class="card-body" id="perfiles">
                             <p><span class="info-value pending">Pendiente</span></p>
                         </div>
                     </div>
                     <div class="card extracted-section">
-                        <div class="card-header"><strong>4. Evaluación</strong></div>
+                        <div class="card-header section-header">
+                            <span class="section-chip">05</span>
+                            <span class="section-icon"><i class="fas fa-clipboard-check"></i></span>
+                            <span class="section-title">Evaluación</span>
+                        </div>
                         <div class="card-body" id="evaluacion">
                             <p><span class="info-value pending">Pendiente</span></p>
                         </div>
                     </div>
                 </div>
             </div>
-        </div>
+        </main>
 
         <!-- Columna derecha: Chat -->
-        <div class="col-md-4" id="chatColumn">
+        <aside class="col-md-4 chat-col" id="chatColumn">
             <div class="chat-panel" id="chatPanel">
-                <div class="card">
-                    <div class="card-header">
-                        <strong>Chat con el Asistente</strong>
+                <div class="card chat-card">
+                    <div class="card-header chat-header">
+                        <div class="chat-header-left">
+                            <div class="chat-avatar">
+                                <i class="fas fa-robot"></i>
+                            </div>
+                            <div class="chat-header-info">
+                                <div class="chat-header-name">Asistente RFI</div>
+                                <div class="chat-header-status" id="chatHeaderStatus">
+                                    <span class="status-dot offline"></span>
+                                    <span class="status-text">Desconectado</span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="card-body">
-                        <div id="chatBox" class="chat-box"></div>
-
-                        <!-- Indicador de escritura -->
-                        <div id="typingIndicator" class="d-flex justify-content-center mt-3" style="display: none;">
-                            <div id="lottieTyping" style="width: 80px; height: 80px;"></div>
+                    <div class="card-body chat-card-body">
+                        <div id="chatBox" class="chat-box">
+                            <div class="chat-empty-state agent-state sleeping">
+                                <div class="agent-stage">
+                                    <div class="agent-zzz" aria-hidden="true">
+                                        <span class="z z1">z</span>
+                                        <span class="z z2">z</span>
+                                        <span class="z z3">Z</span>
+                                    </div>
+                                    <svg class="agent-icon" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                                        <defs>
+                                            <linearGradient id="agentBody" x1="0%" y1="0%" x2="0%" y2="100%">
+                                                <stop offset="0%" stop-color="#fff7f0"/>
+                                                <stop offset="100%" stop-color="#ffe8d6"/>
+                                            </linearGradient>
+                                            <radialGradient id="agentGlow" cx="50%" cy="50%" r="50%">
+                                                <stop offset="0%" stop-color="#F37021" stop-opacity="0.35"/>
+                                                <stop offset="100%" stop-color="#F37021" stop-opacity="0"/>
+                                            </radialGradient>
+                                        </defs>
+                                        <circle class="agent-glow" cx="60" cy="68" r="48" fill="url(#agentGlow)"/>
+                                        <line class="agent-antenna" x1="60" y1="20" x2="60" y2="32" stroke="#F37021" stroke-width="2.5" stroke-linecap="round"/>
+                                        <circle class="agent-antenna-dot" cx="60" cy="18" r="3.5" fill="#F37021"/>
+                                        <rect class="agent-head" x="22" y="32" width="76" height="68" rx="22" fill="url(#agentBody)" stroke="#F37021" stroke-width="2"/>
+                                        <g class="agent-face">
+                                            <path class="agent-eye left" d="M 40 64 Q 44 64 48 64" fill="none" stroke="#1a1a1a" stroke-width="3" stroke-linecap="round"/>
+                                            <path class="agent-eye right" d="M 72 64 Q 76 64 80 64" fill="none" stroke="#1a1a1a" stroke-width="3" stroke-linecap="round"/>
+                                            <circle class="agent-eye-open left" cx="44" cy="64" r="3.5" fill="#1a1a1a"/>
+                                            <circle class="agent-eye-open right" cx="76" cy="64" r="3.5" fill="#1a1a1a"/>
+                                            <path class="agent-mouth" d="M 52 80 Q 60 84 68 80" fill="none" stroke="#1a1a1a" stroke-width="2.5" stroke-linecap="round"/>
+                                        </g>
+                                        <circle class="agent-cheek left" cx="38" cy="76" r="4" fill="#F37021" opacity="0.35"/>
+                                        <circle class="agent-cheek right" cx="82" cy="76" r="4" fill="#F37021" opacity="0.35"/>
+                                    </svg>
+                                </div>
+                                <p class="agent-status">El asistente está descansando...</p>
+                                <p class="agent-hint">Sube y procesa los documentos para despertarlo</p>
+                            </div>
                         </div>
 
                         <div class="chat-input">
@@ -106,9 +215,12 @@
                     </div>
                 </div>
             </div>
-        </div>
+        </aside>
     </div>
 </div>
+
+<!-- Toast container -->
+<div class="toast-container" id="toastContainer" aria-live="polite" aria-atomic="true"></div>
 
 <!-- Modal bonito para archivos rechazados -->
 <div class="modal fade" id="rejectedFilesModal" tabindex="-1" aria-labelledby="rejectedFilesModalLabel" aria-hidden="true">
@@ -126,6 +238,25 @@
       </div>
     </div>
   </div>
+</div>
+
+<!-- Modal de confirmación para eliminar sesión -->
+<div class="modal fade" id="confirmDeleteModal" tabindex="-1" aria-labelledby="confirmDeleteModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-body text-center py-4">
+                <div class="confirm-icon-wrap">
+                    <i class="fas fa-trash-can"></i>
+                </div>
+                <h5 class="mt-3 mb-2">Eliminar sesión</h5>
+                <p class="text-muted mb-0" id="confirmDeleteText">¿Estás seguro? Esta acción no se puede deshacer.</p>
+            </div>
+            <div class="modal-footer justify-content-center border-0 pt-0">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-danger" id="confirmDeleteButton">Eliminar</button>
+            </div>
+        </div>
+    </div>
 </div>
 
 {% include "_modal_create_session.html" %}

@@ -1,9 +1,13 @@
 venv/
+.venv/
 __pycache__/
 *.pyc
 .env
 instance/
 antenv/
+docs/
+sessions.db
+.claude/
 publish_profile.yaml
 *.PublishSettings
 azure-pipelines.yml

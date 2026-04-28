@@ -22,13 +22,19 @@ def ask_question(session_id):
     client = create_openai_client()
     assistant = retrieve_assistant(client, session.assistant_id)
 
-    # Crear un hilo con el mensaje del usuario
-    thread = client.beta.threads.create(
-        messages=[{
-            "role": "user",
-            "content": query,
-        }]
+    # Reconstruir el historial completo desde la BD para que el asistente tenga contexto
+    # de la conversación previa (cada llamada a /ask crea un thread nuevo, así que sin
+    # esto el modelo no ve mensajes anteriores).
+    history = (
+        ChatMessage.query
+        .filter_by(session_id=session_id)
+        .order_by(ChatMessage.timestamp)
+        .all()
     )
+    thread_messages = [{"role": m.role, "content": m.content} for m in history]
+    thread_messages.append({"role": "user", "content": query})
+
+    thread = client.beta.threads.create(messages=thread_messages)
 
     run = client.beta.threads.runs.create_and_poll(
         thread_id=thread.id, assistant_id=assistant.id

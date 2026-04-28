@@ -94,6 +94,16 @@ def delete_session(session_id):
     session_obj = ExtractionSession.query.get(session_id)
     if not session_obj:
         return jsonify({"error": "Session not found"}), 404
+
+    # Limpiar carpeta de archivos en disco antes de borrar la sesión.
+    session_folder = os.path.join(
+        current_app.config['UPLOAD_FOLDER'],
+        session_obj.user_id,
+        session_obj.id
+    )
+    if os.path.isdir(session_folder):
+        shutil.rmtree(session_folder, ignore_errors=True)
+
     db.session.delete(session_obj)
     db.session.commit()
     return jsonify({"message": "Session deleted successfully"})

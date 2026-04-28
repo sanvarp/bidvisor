@@ -27,6 +27,13 @@ def process_files(session_id):
     if not session:
         return jsonify({"error": "Session not found"}), 404
 
+    # Idempotencia: si la sesión ya fue procesada, limpiar estado anterior
+    # (UploadedFile + ExtractedInfo rows) para soportar reprocesamiento.
+    # El vector_store y assistant viejos de Azure tienen TTL de 1 día, no se borran aquí.
+    UploadedFile.query.filter_by(session_id=session_id).delete()
+    ExtractedInfo.query.filter_by(session_id=session_id).delete()
+    db.session.commit()
+
     client = create_openai_client()
     assistant = create_assistant(client)
 
