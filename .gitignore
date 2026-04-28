@@ -5,4 +5,5 @@ __pycache__/
 instance/
 antenv/
 publish_profile.yaml
+*.PublishSettings
 azure-pipelines.yml
