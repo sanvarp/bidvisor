@@ -357,6 +357,19 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
                 return;
             }
+            if (data.section === 'status') {
+                if (data.value === 'error') {
+                    processStatus.innerHTML = '<span class="status-pill error"><i class="fas fa-circle-exclamation"></i>Error en el procesamiento</span>';
+                    processButton.disabled = false;
+                    setChatEnabled(isReprocess);
+                    showToast(data.message || 'Error al procesar documentos', 'error');
+                    eventSource.close();
+                    return;
+                }
+                // Progreso intermedio: indexando / extrayendo.
+                processStatus.innerHTML = `<span class="status-pill processing"><span class="status-pill-dot"></span>${data.message || 'Procesando documentos...'}</span>`;
+                return;
+            }
             if (data.section === 'general') {
                 let element = document.getElementById(data.field);
                 if (!element) {

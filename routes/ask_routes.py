@@ -1,66 +1,74 @@
-import time
 from flask import Blueprint, request, jsonify
-from services.openai_client import create_openai_client, retrieve_assistant
+from config import Config
+from services.openai_client import (
+    create_openai_client, file_search_tool, ASSISTANT_INSTRUCTIONS
+)
+from services.extraction import strip_citations
 from models import db, ChatMessage, ExtractionSession
 
 ask_bp = Blueprint('ask', __name__)
 
+
+def _collect_citations(response) -> list:
+    """
+    Extrae los nombres de archivo citados por file_search, sin repetir y en el
+    orden en que aparecen, para armar el pie de "[n] archivo".
+    """
+    filenames = []
+    for item in getattr(response, "output", []) or []:
+        for content in getattr(item, "content", None) or []:
+            for annotation in getattr(content, "annotations", None) or []:
+                name = getattr(annotation, "filename", None)
+                if name and name not in filenames:
+                    filenames.append(name)
+    return [f"[{index}] {name}" for index, name in enumerate(filenames)]
+
+
 @ask_bp.route('/ask/<session_id>', methods=['POST'])
 def ask_question(session_id):
     """
-    Recibe una pregunta del usuario, la envía al asistente y devuelve la respuesta.
+    Recibe una pregunta del usuario, la envía al modelo con búsqueda sobre los
+    documentos de la sesión y devuelve la respuesta.
     """
     session = ExtractionSession.query.get(session_id)
     if not session:
         return jsonify({"error": "Session not found"}), 404
-    
+
     data = request.get_json()
     query = data.get("query")
     if not query:
         return jsonify({"error": "No query provided"}), 400
 
-    client = create_openai_client()
-    assistant = retrieve_assistant(client, session.assistant_id)
+    # Sin vector store la sesión todavía no se procesó: no hay nada que consultar.
+    if not session.vector_store_id or not session.vector_store_id.startswith("vs_"):
+        return jsonify({"error": "La sesión aún no ha sido procesada."}), 400
 
-    # Reconstruir el historial completo desde la BD para que el asistente tenga contexto
-    # de la conversación previa (cada llamada a /ask crea un thread nuevo, así que sin
-    # esto el modelo no ve mensajes anteriores).
+    client = create_openai_client()
+
+    # Reconstruir el historial completo desde la BD para que el modelo tenga
+    # contexto de la conversación previa (cada llamada a /ask es independiente,
+    # así que sin esto no vería los mensajes anteriores).
     history = (
         ChatMessage.query
         .filter_by(session_id=session_id)
         .order_by(ChatMessage.timestamp)
         .all()
     )
-    thread_messages = [{"role": m.role, "content": m.content} for m in history]
-    thread_messages.append({"role": "user", "content": query})
+    conversation = [{"role": m.role, "content": m.content} for m in history]
+    conversation.append({"role": "user", "content": query})
 
-    thread = client.beta.threads.create(messages=thread_messages)
-
-    run = client.beta.threads.runs.create_and_poll(
-        thread_id=thread.id, assistant_id=assistant.id
+    response = client.responses.create(
+        model=Config.MODEL,
+        instructions=ASSISTANT_INSTRUCTIONS,
+        input=conversation,
+        tools=[file_search_tool(session.vector_store_id)],
     )
 
-    while run.status in ['queued', 'in_progress', 'cancelling']:
-        time.sleep(1)
-        run = client.beta.threads.runs.retrieve(thread_id=thread.id, run_id=run.id)
+    response_text = strip_citations(response.output_text)
 
-    messages = list(client.beta.threads.messages.list(thread_id=thread.id, run_id=run.id))
-    message_content = messages[0].content[0].text
-
-    # Procesar anotaciones y citas (si las hubiera)
-    annotations = message_content.annotations
-    citations = []
-    response_text = message_content.value
-    for index, annotation in enumerate(annotations):
-        response_text = response_text.replace(annotation.text, f" [{index}]")
-        file_citation = getattr(annotation, "file_citation", None)
-        if file_citation:
-            cited_file = client.files.retrieve(file_citation.file_id)
-            print(f"File citation: {file_citation}")
-            print(f"Cited file: {cited_file.filename}")
-            citations.append(f"[{index}] {cited_file.filename}")
-    
-    response_text += "\n\n" + "\n\n".join(citations)
+    citations = _collect_citations(response)
+    if citations:
+        response_text += "\n\n" + "\n\n".join(citations)
 
     user_message = ChatMessage(session_id=session_id, role="user", content=query)
     assistant_message = ChatMessage(session_id=session_id, role="assistant", content=response_text)

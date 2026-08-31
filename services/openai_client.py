@@ -1,6 +1,15 @@
 from openai import AzureOpenAI
 from config import Config
 
+# Prompt de sistema del asistente. Antes vivía dentro del objeto `assistant` de la
+# API de Assistants (retirada por Azure: devuelve 410 assistants_api_deprecated);
+# ahora se envía en cada llamada a la API de Responses.
+ASSISTANT_INSTRUCTIONS = (
+    "Eres un experto en la construcción y gestión de RFIs (Request for Information). "
+    "Utiliza todo tu conocimiento para recopilar y organizar la información clave solicitada "
+    "por el usuario para dar seguimiento efectivo a un RFI en desarrollo."
+)
+
 
 def create_openai_client() -> AzureOpenAI:
     client = AzureOpenAI(
@@ -11,36 +20,15 @@ def create_openai_client() -> AzureOpenAI:
     return client
 
 
-def create_assistant(client: AzureOpenAI):
-    assistant = client.beta.assistants.create(
-        model=Config.MODEL,
-        name=Config.ASSISTANT_NAME,
-        instructions=(
-            "Eres un experto en la construcción y gestión de RFIs (Request for Information). "
-            "Utiliza todo tu conocimiento para recopilar y organizar la información clave solicitada "
-            "por el usuario para dar seguimiento efectivo a un RFI en desarrollo."
-        ),
-        tools=[
-            {
-                "type": "file_search",
-                "file_search": {
-                    "ranking_options": {
-                        "ranker": "default_2024_08_21",
-                        "score_threshold": 0
-                    }
-                }
-            }
-        ],
-        tool_resources={
-            "file_search": {
-                "vector_store_ids": []
-            }
-        },
-        temperature=1,
-        top_p=1
-    )
-    return assistant
+def vector_stores(client: AzureOpenAI):
+    """
+    Acceso al API de vector stores. En openai>=1.66 dejó de colgar de `.beta`,
+    así que se soportan ambas ubicaciones y no quedamos atados a una versión
+    exacta del SDK.
+    """
+    return getattr(client, "vector_stores", None) or client.beta.vector_stores
 
-def retrieve_assistant(client: AzureOpenAI, assistant_id: str):
-    assistant = client.beta.assistants.retrieve(assistant_id)
-    return assistant
+
+def file_search_tool(vector_store_id: str) -> dict:
+    """Herramienta de búsqueda semántica sobre los documentos de la sesión."""
+    return {"type": "file_search", "vector_store_ids": [vector_store_id]}
